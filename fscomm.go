@@ -7,6 +7,7 @@ package comm
 
 import ("fmt"
 	"encoding/binary"
+	"time"
 	"net")
 
 import err "github.com/gvallee/syserror"
@@ -24,10 +25,16 @@ type ServerInfo struct {
 	conn		net.Conn
 	url		string
 	blocksize	uint64
+	timeout		int	// Timeout for accept(), no timeout if set to zero
 }
 
 // State of the local server if it exists (we can be only one server at a time)
 var LocalServer *ServerInfo = nil
+
+func GetConnFromInfo (info *ServerInfo) (net.Conn, err.SysError) {
+	if (info == nil) { return nil, err.ErrNotAvailable }
+	return info.conn, err.NoErr
+}
 
 /**
  * Receive and parse a message header (4 character)
@@ -247,6 +254,8 @@ func CreateServer (info *ServerInfo) err.SysError {
 	LocalServer = info
 	listener, myerr := net.Listen ("tcp", info.url)
 	if (myerr != nil) { return err.ErrFatal }
+
+	if (info.timeout > 0) { listener.(*net.TCPListener).SetDeadline (time.Now ().Add (time.Duration (info.timeout) * time.Second)) }
 
 	fmt.Println ("Server created on", info.url)
 
@@ -564,10 +573,13 @@ func ConnectHandshake (conn net.Conn) err.SysError {
  * @param[in]	blocksize	Block size of the server.
  * @return	Pointer to a server info structure.
  */
-func CreateServerInfo (url string, blocksize uint64) *ServerInfo {
+func CreateServerInfo (url string, blocksize uint64, timeout int) *ServerInfo {
 	s := new (ServerInfo)
+	if (s == nil) { return nil }
+
 	s.blocksize = blocksize
 	s.url = url
+	s.timeout = timeout
 
 	return s
 }

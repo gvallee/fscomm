@@ -31,7 +31,7 @@ func TestServerCreation (t *testing.T) {
 	fmt.Print ("Testing creation of a valid server ")
 
 	// Create a server asynchronously
-	server_info := CreateServerInfo ("127.0.0.1:8888", uint64(1024))
+	server_info := CreateServerInfo ("127.0.0.1:8888", uint64(1024), 0)
 	go CreateEmbeddedServer (server_info)
 
 	// Create a simple client that will just terminate everything
@@ -78,7 +78,7 @@ func TestSendRecv (t *testing.T) {
 
 	// Create a server asynchronously
 	fmt.Println ("Creating server...")
-	server_info := CreateServerInfo (url, uint64(1024))
+	server_info := CreateServerInfo (url, uint64(1024), 0)
 	go runServer (server_info)
 
 	conn, myerr := Connect2Server (url)
