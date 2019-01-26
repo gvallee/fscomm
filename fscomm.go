@@ -42,7 +42,7 @@ func GetConnFromInfo (info *ServerInfo) (net.Conn, err.SysError) {
  * @return	Message type (string)
  * @return	System error handler
  */
-func getHeader (conn net.Conn) (string, err.SysError) {
+func GetHeader (conn net.Conn) (string, err.SysError) {
 	if (conn == nil) { return INVALID, err.ErrNotAvailable }
 
 	hdr := make ([]byte, 4)
@@ -176,7 +176,7 @@ func doServer (conn net.Conn) err.SysError {
 	if (syserr != err.NoErr) { fmt.Println ("ERROR: Error during handshake with client") }
 	for (done != 1) {
 		// Handle the message header
-		msgtype, syserr := getHeader (conn)
+		msgtype, syserr := GetHeader (conn)
 		if (syserr != err.NoErr) { done = 1 }
 		if (msgtype == "INVA" || msgtype == "TERM") { done = 1 }
 
@@ -310,7 +310,7 @@ func sendUint64 (conn net.Conn, value uint64) err.SysError {
  * @return	Received 8 bytes integer
  * @return	System error handle
  */
-func recvUint64 (conn net.Conn) (uint64, err.SysError) {
+func RecvUint64 (conn net.Conn) (uint64, err.SysError) {
 	if (conn == nil) { return 0, err.ErrFatal }
 
 	msg := make ([]byte, 8)
@@ -346,7 +346,7 @@ func sendMsgType (conn net.Conn, msgType string) err.SysError {
 func recvMsgType (conn net.Conn) (string, err.SysError) {
 	if (conn == nil) { return "", err.ErrFatal }
 
-	msgtype, syserr := getHeader (conn)
+	msgtype, syserr := GetHeader (conn)
 	if (syserr != err.NoErr) { return "", err.ErrFatal }
 
 	return msgtype, err.NoErr
@@ -374,7 +374,7 @@ func sendData (conn net.Conn, data []byte) err.SysError {
  * @return	Buffer with the received data ([]byte)
  * @return	System error handle
  */
-func recvData (conn net.Conn, size uint64) ([]byte, err.SysError) {
+func DoRecvData (conn net.Conn, size uint64) ([]byte, err.SysError) {
 	data := make ([]byte, size)
 	if (data == nil) { return nil, err.ErrOutOfRes }
 
@@ -404,7 +404,7 @@ func sendNamespace (conn net.Conn, namespace string) err.SysError {
  * @return	Namespace's name (string)
  * @return	System error handle
  */
-func recvNamespace (conn net.Conn, size uint64) (string, err.SysError) {
+func RecvNamespace (conn net.Conn, size uint64) (string, err.SysError) {
 	if (conn == nil) { return "", err.ErrFatal }
 
 	buff := make ([]byte, size)
@@ -496,27 +496,27 @@ func RecvData (conn net.Conn) (string, uint64, uint64, []byte, err.SysError) {
 	if (terr != err.NoErr || msgtype != DATAMSG) { return "", 0, 0, nil, terr }
 
 	// Recv the length of the namespace
-	nslen, syserr := recvUint64 (conn)
+	nslen, syserr := RecvUint64 (conn)
 	if (syserr != err.NoErr) { return "", 0, 0, nil, syserr }
 
 	// Recv the namespace
-	namespace, nserr := recvNamespace (conn, nslen)
+	namespace, nserr := RecvNamespace (conn, nslen)
 	if (nserr != err.NoErr) { return "", 0, 0, nil, nserr }
 
 	// Recv blockid
-	blockid, berr := recvUint64 (conn)
+	blockid, berr := RecvUint64 (conn)
 	if (berr != err.NoErr) { return namespace, 0, 0, nil, berr }
 
 	// Recv offset
-	offset, oerr := recvUint64 (conn)
+	offset, oerr := RecvUint64 (conn)
 	if (oerr != err.NoErr) { return namespace, blockid, 0, nil, oerr }
 
 	// Recv data size
-	size, serr := recvUint64 (conn)
+	size, serr := RecvUint64 (conn)
 	if (serr != err.NoErr) { return namespace, blockid, offset, nil, serr }
 
 	// Recv the actual data
-	data, derr := recvData (conn, size)
+	data, derr := DoRecvData (conn, size)
 	if (derr != err.NoErr) { return namespace, blockid, offset, nil, derr }
 
 	return namespace, blockid, offset, data, err.NoErr
@@ -533,7 +533,7 @@ func RecvData (conn net.Conn) (string, uint64, uint64, []byte, err.SysError) {
 func RecvMsg (conn net.Conn) (string, uint64, []byte, err.SysError) {
 	if (conn == nil) { return "", 0, nil, err.ErrFatal }
 
-	msgtype, myerr := getHeader (conn)
+	msgtype, myerr := GetHeader (conn)
 	// Messages without payload
 	if (msgtype == "TERM" || msgtype == "INVA" || myerr != err.NoErr) { return msgtype, 0, nil, err.ErrFatal }
 
