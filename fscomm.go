@@ -17,8 +17,9 @@ var INVALID = "INVA" // Invalid msg
 var TERMMSG = "TERM" // Termination message
 var CONNREQ = "CONN" // Connection request (initiate a connection handshake
 var CONNACK = "CACK" // Response to a connection request (Connection ack)
-var DATAMSG = "DATA" // Data msg
-var READREQ = "READ" // FIXME: not implemented yet
+var DATAMSG = "DATA" // Data msg, associated to a write operation
+var READREQ = "READ" // Data request, associated to a read operation
+var RDREPLY = "RRPL" // Reply to a READREQ, including the data
 
 // Structure to store server information (host we connect to)
 type ServerInfo struct {
@@ -31,6 +32,13 @@ type ServerInfo struct {
 // State of the local server if it exists (we can be only one server at a time)
 var LocalServer *ServerInfo = nil
 
+/**
+ * Return the connection from the server info structure. This allows us to have
+ * external components access the connection structure and use it
+ * @param[in]   info    Data server info's data structure
+ * @return      Connection structure
+ * @return      System error handle
+ */
 func GetConnFromInfo (info *ServerInfo) (net.Conn, err.SysError) {
 	if (info == nil) { return nil, err.ErrNotAvailable }
 	return info.conn, err.NoErr
@@ -87,6 +95,16 @@ func GetHeader (conn net.Conn) (string, err.SysError) {
 		return DATAMSG, err.NoErr
 	}
 
+	if (string(hdr[:s]) == READREQ) {
+		fmt.Println ("Recv'd read request")
+		return READREQ, err.NoErr
+	}
+
+	if (string(hdr[:s]) == RDREPLY) {
+		fmt.Println ("Recv'd read reply")
+		return RDREPLY, err.NoErr
+	}
+
 	fmt.Println ("Invalid msg header")
 	return INVALID, err.ErrFatal
 }
@@ -123,6 +141,48 @@ func getPayload (conn net.Conn, size uint64) ([]byte, err.SysError) {
 	}
 
 	return payload, err.NoErr
+}
+
+/**
+ * Function called upon the reception of a read request. It is assumed that the message
+ * header already has been received. This returns all the necessary data required by the
+ * data server to read and return data from a given block.
+ * @param[in]   conn    Active connection from which to receive data
+ * @return	Namespace's name of the read request
+ * @return	Block id of the read request
+ * @return	Offset of the read request
+ * @return	Size of the read request
+ * @return	System error handle
+ */
+func HandleReadReq (conn net.Conn) (string, uint64, uint64, uint64, err.SysError) {
+	var namespace_len uint64
+	var namespace string
+	var blockid uint64
+	var offset uint64
+	var size uint64
+	var myerr err.SysError
+
+	// Recv the length of the namespace
+        namespace_len, myerr = RecvUint64 (conn)
+        if (myerr != err.NoErr) { return "", 0, 0, 0, myerr }
+
+        // Recv the namespace
+        namespace, myerr = RecvNamespace (conn, namespace_len)
+        if (myerr != err.NoErr) { return "", 0, 0, 0, myerr }
+
+        // Recv the blockid (8 bytes)
+        blockid, myerr = RecvUint64 (conn)
+        if (myerr != err.NoErr) { return "", 0, 0, 0, myerr }
+
+        // Recv the offset
+        offset, myerr = RecvUint64 (conn)
+        if (myerr != err.NoErr) { return "", 0, 0, 0, myerr }
+
+        // Recv data size
+        size, myerr = RecvUint64 (conn)
+        if (myerr != err.NoErr) { return "", 0, 0, 0, myerr }
+
+        return namespace, blockid, offset, size, err.NoErr
 }
 
 /**
@@ -418,6 +478,43 @@ func RecvNamespace (conn net.Conn, size uint64) (string, err.SysError) {
 	if (myerr != nil || uint64(s) != size || buff == nil) { return "", err.ErrFatal }
 
 	return string(buff), err.NoErr
+}
+
+/**
+ * Send a read request to a data server.
+ * @param[in]   conn    Active connection from which to receive data
+ * @param[in]   namespace       Namespace's name in the context of which the data is sent
+ * @param[in]   blockid         Block id where the data needs to be saved
+ * @param[in]   offset          Block offset where the data needs to be saved
+ * @param[in]	size		Amount of data to read
+ */
+func SendReadReq (conn net.Conn, namespace string, blockid uint64, offset uint64, size uint64) err.SysError {
+	// Send the msg type
+        myerr := sendMsgType (conn, DATAMSG)
+        if (myerr != err.NoErr) { return myerr }
+
+        // Send the length of the namespace
+        var nslen uint64 = uint64 (len (namespace))
+        myerr = sendUint64 (conn, nslen)
+        if (myerr != err.NoErr) { return myerr }
+
+        // Send the namespace
+        myerr = sendNamespace (conn, namespace)
+        if (myerr != err.NoErr) { return myerr }
+
+        // Send the blockid (8 bytes)
+        myerr = sendUint64 (conn, blockid)
+        if (myerr != err.NoErr) { return myerr }
+
+        // Send the offset
+        myerr = sendUint64 (conn, offset)
+        if (myerr != err.NoErr) { return myerr }
+
+        // Send data size
+        myerr = sendUint64 (conn, size)
+        if (myerr != err.NoErr) { return myerr }
+
+	return err.NoErr
 }
 
 /**
