@@ -24,7 +24,7 @@ func sendFiniMsg (conn net.Conn) {
 	myerr := SendMsg (conn, TERMMSG, nil)
 	if (myerr != err.NoErr) { log.Fatal ("ERROR: SendMsg() failed") }
 
-	time.Sleep (1 * time.Second) // Give a chance for the msg to arrive before we exit which could close the connection before the test completes
+	time.Sleep (5 * time.Second) // Give a chance for the msg to arrive before we exit which could close the connection before the test completes
 }
 
 func TestServerCreation (t *testing.T) {
@@ -35,7 +35,8 @@ func TestServerCreation (t *testing.T) {
 	go CreateEmbeddedServer (server_info)
 
 	// Create a simple client that will just terminate everything
-	conn, _ := Connect2Server ("127.0.0.1:8888")
+	conn, bs, connerr := Connect2Server ("127.0.0.1:8888")
+	if (conn == nil || bs != 1024 || connerr != err.NoErr) { log.Fatal ("ERROR: Cannot connect to server") }
 	sendFiniMsg (conn)
 
 	// Terminate global state
@@ -81,10 +82,13 @@ func TestSendRecv (t *testing.T) {
 	server_info := CreateServerInfo (url, uint64(1024), 0)
 	go runServer (server_info)
 
-	conn, myerr := Connect2Server (url)
-	if (myerr != err.NoErr) { log.Fatal ("Client error: Cannot connect to server") }
+	// Once we know the server is up, we connect to it
+	fmt.Println ("Server up, conencting...")
+	conn, bs, myerr := Connect2Server (url)
+	if (conn == nil || bs != 1024 || myerr != err.NoErr) { log.Fatal ("Client error: Cannot connect to server") }
 	fmt.Println ("Successfully connected to server")
 
+	// Now we perform the communication tests
 	fmt.Println ("Sending test data...")
 	buff := make ([]byte, 512)
 	fmt.Println ("Sending data...")

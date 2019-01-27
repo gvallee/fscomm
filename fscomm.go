@@ -50,13 +50,16 @@ func GetHeader (conn net.Conn) (string, err.SysError) {
 
 	/* read the msg type */
 	s, myerr := conn.Read (hdr)
-	if (myerr != nil) { return INVALID, err.ErrFatal }
+	if (myerr != nil) { fmt.Println ("ERROR:", myerr.Error()); return INVALID, err.ErrFatal }
 
 	// Connection is closed
 	if (s == 0) {
 		fmt.Println ("Connection closed")
 		return TERMMSG, err.NoErr
 	}
+
+	// Read returns an error (we test this only as a second test since s=0 means socket closed, whic returns also EOF as an error but we want to handle it as normal termination, not an error case
+	if (myerr != nil) { fmt.Println ("ERROR:", myerr.Error()); return INVALID, err.ErrFatal }
 
 	if (s > 0 && s != 4) {
 		fmt.Println ("ERROR Cannot recv header")
@@ -253,11 +256,11 @@ func CreateServer (info *ServerInfo) err.SysError {
 
 	LocalServer = info
 	listener, myerr := net.Listen ("tcp", info.url)
-	if (myerr != nil) { return err.ErrFatal }
+	if (myerr != nil) { fmt.Println (myerr.Error()); return err.ErrFatal }
 
-	if (info.timeout > 0) { listener.(*net.TCPListener).SetDeadline (time.Now ().Add (time.Duration (info.timeout) * time.Second)) }
-
-	fmt.Println ("Server created on", info.url)
+	if (info.timeout > 0) {
+		listener.(*net.TCPListener).SetDeadline (time.Now ().Add (time.Duration (info.timeout) * time.Second))
+	}
 
 	info.conn, myerr = listener.Accept()
 
@@ -268,19 +271,20 @@ func CreateServer (info *ServerInfo) err.SysError {
  * Connect to a server that is listening for incoming connection request
  * @param[in[	url	URL of the server to connect to
  * @return	Connection handle to the server
+ * @return	Data server's block size
  * @return	System error handle
  */
-func Connect2Server (url string) (net.Conn, err.SysError) {
+func Connect2Server (url string) (net.Conn, uint64, err.SysError) {
 	conn, neterr := net.Dial ("tcp", url)
 	if (neterr != nil) {
 		fmt.Println ("ERROR: ", neterr.Error())
-		return nil, err.ErrOutOfRes
+		return nil, 0, err.ErrOutOfRes
 	}
 
-	myerr := ConnectHandshake (conn)
-	if (myerr != err.NoErr) { return nil, err.ErrFatal }
+	bs, myerr := ConnectHandshake (conn)
+	if (bs == 0 || myerr != err.NoErr) { return nil, 0, err.ErrFatal }
 
-	return conn, err.NoErr
+	return conn, bs, err.NoErr
 }
 
 /**
@@ -552,19 +556,20 @@ func RecvMsg (conn net.Conn) (string, uint64, []byte, err.SysError) {
 /**
  * Initiate a connection handshake. Required for a client to successfully connect to a server.
  * @param[in]   conn    Active connection from which to receive data
+ * @return	Server's block size
  * @return	System error handle
  */
-func ConnectHandshake (conn net.Conn) err.SysError {
+func ConnectHandshake (conn net.Conn) (uint64, err.SysError) {
 	myerr := SendMsg (conn, CONNREQ, nil)
-	if (myerr != err.NoErr) { return myerr }
+	if (myerr != err.NoErr) { return 0, myerr }
 
 	// Receive the CONNACK, the payload is the block_sizw
 	msgtype, s, buff, recverr := RecvMsg (conn)
-	if (recverr != err.NoErr || msgtype != CONNACK || s != 8 || buff == nil) { return err.ErrFatal }
+	if (recverr != err.NoErr || msgtype != CONNACK || s != 8 || buff == nil) { return 0, err.ErrFatal }
 	block_size := binary.LittleEndian.Uint64(buff)
 	if (LocalServer != nil) { LocalServer.blocksize = block_size }
 
-	return err.NoErr
+	return block_size, err.NoErr
 }
 
 /**
@@ -580,6 +585,7 @@ func CreateServerInfo (url string, blocksize uint64, timeout int) *ServerInfo {
 	s.blocksize = blocksize
 	s.url = url
 	s.timeout = timeout
+	s.conn = nil
 
 	return s
 }
