@@ -18,27 +18,30 @@ This communication layer supports 2 types of message:
 
 With a zero size payload
 
+````
    -----------------------
    | Type | Payload Size |
    -----------------------
    <- 4 -><----- 8 ------>
+````
 
 With a non-zero size payload
 
+````
    -----------------------------------------
    | Type | Payload Size | Payload         |
    -----------------------------------------
    <- 4 -><----- 8 ------><- payload size -> (in bytes)
-
+````
 ### Data Message Structure
 
 Namespace and payload are required to be defined and valid.
-
+````
   -----------------------------------------------------------------------------------
   | Type | NS len | NameSpace | blockID | Offset | Payload Size | Payload           |
   -----------------------------------------------------------------------------------
   <- 4 -><-- 8 ---><- NS len -><-- 8 --><-- 8 ---><---- 8 -----><-- payload size -->
-
+````
 ## Connection Handshake
 
 When a client connects to a server, a connection handshake occurs. The handshake allows us
@@ -52,27 +55,28 @@ Both these message types are basic messages
 ### Connection Requests
 
 A connection request is a basic message, that a client sends when connecting to a server:
+````
   ---------------
   | CONNREQ | 0 |
   ---------------
-
+````
 ### Connection Ack
 
 A connection ACK is the response from a server to a client when receiving a connection request.
-
+````
   ----------------------------
   | CONNACK | 8 | block size |
   ----------------------------
-
+````
 # Termination Messages
 
 A termination message is a basic message that can be sent typically from the client to a server,
 in order to finalize a connection.
-
+````
    ---------------
    | TERMMSG | 0 |
    ---------------
-
+````
 Such a message could potentially use a paylaod, but the default implemnentation does not include one
 
 # Data Messages
@@ -82,3 +86,18 @@ once received by a server) in the context of a write operation of the file syste
 a client in the context of a read operation.
 In the context of a read operation, when the data is returned from the server, blockid is ignored by the
 client.
+
+# Read Request Message
+
+A client can send read request to data servers in order to obtain data. Such a message has the following format:
+````
+    ----------------------------------------------------------------------
+    | READRQ | NS len | NameSpace | blockID | blockOffset | Size to read |
+    ----------------------------------------------------------------------
+    <-- 4 ---><-- 8 --><- NS len -><-- 8 ---><---- 8 -----><----- 8 ----->
+````
+Upon reception of such a message, the server sends the data to the client via a RDREPLY message
+
+# Read Reply Message
+
+A read reply message is a basic message of type RDREPLY.
